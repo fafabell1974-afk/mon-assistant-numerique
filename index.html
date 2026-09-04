@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#2563eb">
+  <meta name="description" content="Assistant Numérique à Domicile - Outil d'intervention professionnel">
+  <title>Assistant Numérique</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Header -->
+    <header class="app-header">
+      <h1>🏠 Assistant Numérique</h1>
+      <div class="online-status">
+        <span class="status-dot" id="statusDot"></span>
+        <span id="statusText">Hors ligne</span>
+      </div>
+    </header>
+
+    <!-- SECTION: Dashboard -->
+    <section id="sec-dashboard" class="section active">
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-value" id="statClients">0</div>
+          <div class="stat-label">Clients</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="statToday">0</div>
+          <div class="stat-label">Aujourd'hui</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="statDone">0</div>
+          <div class="stat-label">Terminées</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="statPending">0</div>
+          <div class="stat-label">En cours</div>
+        </div>
+      </div>
+
+      <div class="quick-actions">
+        <div class="quick-action-btn" onclick="app.goTo('intervention-wizard')">
+          <div class="icon">➕</div>
+          <div class="label">Nouvelle intervention</div>
+        </div>
+        <div class="quick-action-btn" onclick="app.openModal('modal-client')">
+          <div class="icon">👤</div>
+          <div class="label">Nouveau client</div>
+        </div>
+        <div class="quick-action-btn" onclick="app.goTo('ai')">
+          <div class="icon">🤖</div>
+          <div class="label">Assistant IA</div>
+        </div>
+        <div class="quick-action-btn" onclick="app.goTo('devices')">
+          <div class="icon">🔍</div>
+          <div class="label">Rechercher appareil</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Derniers clients</div>
+        <div id="dashboardClients"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Dernières interventions</div>
+        <div id="dashboardInterventions"></div>
+      </div>
+    </section>
+
+    <!-- SECTION: Clients -->
+    <section id="sec-clients" class="section">
+      <div class="search-box">
+        <input type="text" id="clientSearch" placeholder="Rechercher un client..." oninput="clientsModule.search(this.value)">
+      </div>
+      <button class="btn btn-primary" onclick="app.openModal('modal-client')">➕ Nouveau client</button>
+      <div id="clientsList"></div>
+    </section>
+
+    <!-- SECTION: Client Detail -->
+    <section id="sec-client-detail" class="section">
+      <button class="btn btn-secondary btn-sm" onclick="app.goTo('clients')">← Retour</button>
+      <div class="card" style="margin-top:12px">
+        <h2 id="cdName" style="margin-bottom:4px"></h2>
+        <p id="cdContact" style="color:var(--text-secondary);font-size:0.85rem"></p>
+        <p id="cdAddress" style="color:var(--text-secondary);font-size:0.85rem;margin-top:4px"></p>
+        <p id="cdNotes" style="margin-top:10px;font-size:0.9rem"></p>
+        <div class="btn-row" style="margin-top:12px">
+          <button class="btn btn-primary btn-sm" onclick="clientsModule.editCurrent()">✏️ Modifier</button>
+          <button class="btn btn-secondary btn-sm" onclick="app.openModal('modal-device', {clientId: app.currentClientId})">➕ Appareil</button>
+          <button class="btn btn-success btn-sm" onclick="interventionsModule.startWizard(app.currentClientId)">🔧 Intervenir</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">📱 Appareils</div>
+        <div id="cdDevices"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">📋 Historique</div>
+        <div id="cdHistory"></div>
+      </div>
+    </section>
+
+    <!-- SECTION: Devices -->
+    <section id="sec-devices" class="section">
+      <div class="search-box">
+        <input type="text" id="deviceSearch" placeholder="Rechercher un appareil (marque + modèle)..." oninput="devicesModule.search(this.value)">
+      </div>
+      <button class="btn btn-primary" onclick="app.openModal('modal-device')">➕ Nouvel appareil</button>
+      <div id="devicesList"></div>
+    </section>
+
+    <!-- SECTION: Device Detail -->
+    <section id="sec-device-detail" class="section">
+      <button class="btn btn-secondary btn-sm" onclick="app.goTo('devices')">← Retour</button>
+      <div class="card" style="margin-top:12px">
+        <div id="ddContent"></div>
+        <div class="btn-row" style="margin-top:12px">
+          <button class="btn btn-primary btn-sm" onclick="devicesModule.editCurrent()">✏️ Modifier</button>
+          <button class="btn btn-success btn-sm" onclick="interventionsModule.startWizard(null, app.currentDeviceId)">🔧 Intervenir</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">📋 Interventions liées</div>
+        <div id="ddInterventions"></div>
+      </div>
+    </section>
+
+    <!-- SECTION: Interventions -->
+    <section id="sec-interventions" class="section">
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="app.goTo('intervention-wizard')">➕ Nouvelle</button>
+        <button class="btn btn-secondary" onclick="app.openModal('modal-filters')">🔍 Filtres</button>
+      </div>
+      <div id="interventionsList"></div>
+    </section>
+
+    <!-- SECTION: Intervention Detail -->
+    <section id="sec-intervention-detail" class="section">
+      <button class="btn btn-secondary btn-sm" onclick="app.goTo('interventions')">← Retour</button>
+      <div id="idContent" style="margin-top:12px"></div>
+    </section>
+
+    <!-- SECTION: Intervention Wizard -->
+    <section id="sec-intervention-wizard" class="section">
+      <div class="wizard-steps">
+        <div class="wizard-step active" id="ws1"><div class="wizard-step-number">1</div><div class="wizard-step-label">Client</div></div>
+        <div class="wizard-step" id="ws2"><div class="wizard-step-number">2</div><div class="wizard-step-label">Appareil</div></div>
+        <div class="wizard-step" id="ws3"><div class="wizard-step-number">3</div><div class="wizard-step-label">Problème</div></div>
+        <div class="wizard-step" id="ws4"><div class="wizard-step-number">4</div><div class="wizard-step-label">Diagnostic</div></div>
+        <div class="wizard-step" id="ws5"><div class="wizard-step-number">5</div><div class="wizard-step-label">Recherche</div></div>
+        <div class="wizard-step" id="ws6"><div class="wizard-step-number">6</div><div class="wizard-step-label">Intervention</div></div>
+        <div class="wizard-step" id="ws7"><div class="wizard-step-number">7</div><div class="wizard-step-label">Compte-rendu</div></div>
+      </div>
+
+      <div id="wizardContent"></div>
+    </section>
+
+    <!-- SECTION: Documentation -->
+    <section id="sec-documentation" class="section">
+      <div class="search-box">
+        <input type="text" id="docSearch" placeholder="Rechercher dans la documentation..." oninput="documentationModule.search(this.value)">
+      </div>
+      <div class="category-grid" style="margin-bottom:16px">
+        <button class="category-btn" onclick="documentationModule.filter('ordinateur')">💻 Ordinateurs</button>
+        <button class="category-btn" onclick="documentationModule.filter('smartphone')">📱 Smartphones</button>
+        <button class="category-btn" onclick="documentationModule.filter('tablette')">📱 Tablettes</button>
+        <button class="category-btn" onclick="documentationModule.filter('imprimante')">🖨️ Imprimantes</button>
+        <button class="category-btn" onclick="documentationModule.filter('reseau')">🌐 Réseau</button>
+        <button class="category-btn" onclick="documentationModule.filter('photo')">📷 Photos</button>
+        <button class="category-btn" onclick="documentationModule.filter('application')">💬 Applications</button>
+        <button class="category-btn" onclick="documentationModule.filter('')">Tout</button>
+      </div>
+      <div id="documentationList"></div>
+    </section>
+
+    <!-- SECTION: Checklists -->
+    <section id="sec-checklists" class="section">
+      <button class="btn btn-primary" onclick="checklistsModule.create()">➕ Nouvelle checklist</button>
+      <div id="checklistsList" style="margin-top:12px"></div>
+    </section>
+
+    <!-- SECTION: AI -->
+    <section id="sec-ai" class="section">
+      <div class="card">
+        <div class="card-title">🤖 Assistant IA</div>
+        <div class="form-group">
+          <label>Contexte (optionnel)</label>
+          <select id="aiClientSelect" onchange="aiModule.loadClientDevices(this.value)">
+            <option value="">-- Client --</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <select id="aiDeviceSelect">
+            <option value="">-- Appareil --</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Décrivez le problème</label>
+          <textarea id="aiPrompt" placeholder="Ex: Le client n'arrive pas à connecter son imprimante HP au Wi-Fi..."></textarea>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-primary" onclick="aiModule.ask()" id="aiAskBtn">💬 Demander à l'IA</button>
+          <button class="btn btn-secondary" onclick="aiModule.clear()">🗑️ Effacer</button>
+        </div>
+        <div id="aiResponse" style="margin-top:16px"></div>
+      </div>
+    </section>
+
+    <!-- SECTION: Settings -->
+    <section id="sec-settings" class="section">
+      <div class="card">
+        <div class="card-title">🏢 Général</div>
+        <div class="form-group">
+          <label>Nom de l'entreprise</label>
+          <input type="text" id="setCompany" onchange="settingsModule.save()">
+        </div>
+        <div class="form-group">
+          <label>Nom de l'intervenant</label>
+          <input type="text" id="setName" onchange="settingsModule.save()">
+        </div>
+        <div class="form-group">
+          <label>Téléphone</label>
+          <input type="tel" id="setPhone" onchange="settingsModule.save()">
+        </div>
+        <div class="form-group">
+          <label>E-mail</label>
+          <input type="email" id="setEmail" onchange="settingsModule.save()">
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">🤖 Configuration IA</div>
+        <div class="form-group">
+          <label>Fournisseur</label>
+          <select id="aiProvider" onchange="settingsModule.save()">
+            <option value="">-- Choisir --</option>
+            <option value="openai">OpenAI</option>
+            <option value="gemini">Google Gemini</option>
+            <option value="mistral">Mistral AI</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Clé API</label>
+          <input type="password" id="aiApiKey" placeholder="sk-... ou autre" onchange="settingsModule.save()">
+          <small style="color:var(--danger);font-size:0.75rem">⚠️ Ne jamais partager cette clé. Elle reste locale.</small>
+        </div>
+        <div class="form-group">
+          <label>Modèle</label>
+          <input type="text" id="aiModel" placeholder="Ex: gpt-4o, gemini-1.5-pro..." onchange="settingsModule.save()">
+        </div>
+        <button class="btn btn-secondary" onclick="aiModule.testConnection()">🧪 Tester la connexion</button>
+      </div>
+
+      <div class="card">
+        <div class="card-title">💾 Sauvegarde</div>
+        <button class="btn btn-primary" onclick="backupModule.export()">📤 Exporter JSON</button>
+        <button class="btn btn-secondary" onclick="backupModule.import()">📥 Importer JSON</button>
+        <div style="margin-top:12px">
+          <button class="btn btn-primary" onclick="googleDriveModule.connect()">🔑 Connecter Google Drive</button>
+          <button class="btn btn-secondary" onclick="googleDriveModule.backup()">☁️ Sauvegarder sur Drive</button>
+          <button class="btn btn-secondary" onclick="googleDriveModule.list()">📋 Liste des sauvegardes</button>
+        </div>
+        <div id="gdriveStatus" style="margin-top:8px;font-size:0.8rem;color:var(--text-secondary)"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">🔒 Sécurité</div>
+        <div class="settings-item">
+          <div>
+            <div class="settings-label">Code PIN</div>
+            <div class="settings-desc">Verrouiller l'application</div>
+          </div>
+          <button class="btn btn-sm btn-secondary" onclick="securityModule.setupPin()" id="pinSetupBtn">Configurer</button>
+        </div>
+        <div class="settings-item">
+          <div>
+            <div class="settings-label">Verrouillage auto</div>
+            <div class="settings-desc">Après 5 min d'inactivité</div>
+          </div>
+          <div class="toggle" id="autoLockToggle" onclick="securityModule.toggleAutoLock()"></div>
+        </div>
+        <button class="btn btn-secondary" onclick="app.goTo('security-page')" style="margin-top:8px">📄 Confidentialité et sécurité</button>
+      </div>
+
+      <div class="card">
+        <div class="card-title">🎨 Apparence</div>
+        <div class="settings-item">
+          <div class="settings-label">Mode sombre</div>
+          <div class="toggle" id="darkModeToggle" onclick="settingsModule.toggleDark()"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">🗑️ Données de démonstration</div>
+        <button class="btn btn-warning" onclick="dbModule.loadDemoData()">🎲 Charger données démo</button>
+        <button class="btn btn-danger" onclick="dbModule.clearAll()">⚠️ Tout supprimer</button>
+      </div>
+    </section>
+
+    <!-- SECTION: Security Page -->
+    <section id="sec-security-page" class="section">
+      <button class="btn btn-secondary btn-sm" onclick="app.goTo('settings')">← Retour</button>
+      <div class="card" style="margin-top:12px">
+        <div class="card-title">🔒 Confidentialité et sécurité</div>
+        <p style="font-size:0.9rem;line-height:1.7;margin-bottom:12px">
+          <strong>Où sont stockées vos données ?</strong><br>
+          Toutes les données (clients, appareils, interventions) sont stockées <strong>localement</strong> dans votre navigateur via IndexedDB. Aucune donnée n'est envoyée sur nos serveurs.
+        </p>
+        <p style="font-size:0.9rem;line-height:1.7;margin-bottom:12px">
+          <strong>Clés API</strong><br>
+          Votre clé API IA reste dans le stockage local de votre appareil. Elle n'est jamais incluse dans les sauvegardes.
+        </p>
+        <p style="font-size:0.9rem;line-height:1.7;margin-bottom:12px">
+          <strong>Google Drive</strong><br>
+          Les sauvegardes sur Google Drive utilisent votre compte Google. Seules les données de l'application sont transférées (jamais les clés API).
+        </p>
+        <p style="font-size:0.9rem;line-height:1.7;margin-bottom:12px">
+          <strong>Assistant IA</strong><br>
+          Seul le contexte technique que vous choisissez d'envoyer est transmis au fournisseur IA. Aucune donnée personnelle client n'est envoyée automatiquement.
+        </p>
+        <p style="font-size:0.9rem;line-height:1.7">
+          <strong>Recommandation</strong><br>
+          Utilisez le verrouillage par PIN et verrouillez votre appareil mobile pour protéger les données de vos clients.
+        </p>
+      </div>
+    </section>
+
+    <!-- SECTION: Search Results -->
+    <section id="sec-search-results" class="section">
+      <button class="btn btn-secondary btn-sm" onclick="app.goTo('dashboard')">← Retour</button>
+      <h2 style="margin:12px 0">Résultats de recherche</h2>
+      <div id="searchResults"></div>
+    </section>
+
+    <!-- Bottom Navigation -->
+    <nav class="bottom-nav">
+      <button class="nav-item active" onclick="app.goTo('dashboard')" data-target="dashboard">
+        <span class="nav-icon">🏠</span>
+        <span>Accueil</span>
+      </button>
+      <button class="nav-item" onclick="app.goTo('clients')" data-target="clients">
+        <span class="nav-icon">👤</span>
+        <span>Clients</span>
+      </button>
+      <button class="nav-item" onclick="app.goTo('interventions')" data-target="interventions">
+        <span class="nav-icon">🔧</span>
+        <span>Interventions</span>
+      </button>
+      <button class="nav-item" onclick="app.goTo('devices')" data-target="devices">
+        <span class="nav-icon">📱</span>
+        <span>Appareils</span>
+      </button>
+      <button class="nav-item" onclick="app.goTo('ai')" data-target="ai">
+        <span class="nav-icon">🤖</span>
+        <span>IA</span>
+      </button>
+    </nav>
+  </div>
+
+  <!-- MODAL: Client Form -->
+  <div class="modal-overlay" id="modal-client">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title" id="modalClientTitle">Nouveau client</div>
+        <button class="modal-close" onclick="app.closeModal('modal-client')">&times;</button>
+      </div>
+      <div class="form-group">
+        <label>Nom *</label>
+        <input type="text" id="clientNom">
+      </div>
+      <div class="form-group">
+        <label>Prénom *</label>
+        <input type="text" id="clientPrenom">
+      </div>
+      <div class="form-group">
+        <label>Téléphone</label>
+        <input type="tel" id="clientPhone">
+      </div>
+      <div class="form-group">
+        <label>E-mail</label>
+        <input type="email" id="clientEmail">
+      </div>
+      <div class="form-group">
+        <label>Adresse</label>
+        <input type="text" id="clientAddress">
+      </div>
+      <div class="form-group">
+        <label>Notes</label>
+        <textarea id="clientNotes"></textarea>
+      </div>
+      <button class="btn btn-primary" onclick="clientsModule.save()">💾 Enregistrer</button>
+      <button class="btn btn-danger" id="btnDeleteClient" style="display:none" onclick="clientsModule.deleteCurrent()">🗑️ Supprimer</button>
+    </div>
+  </div>
+
+  <!-- MODAL: Device Form -->
+  <div class="modal-overlay" id="modal-device">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title" id="modalDeviceTitle">Nouvel appareil</div>
+        <button class="modal-close" onclick="app.closeModal('modal-device')">&times;</button>
+      </div>
+      <div class="form-group">
+        <label>Catégorie *</label>
+        <select id="deviceCategory">
+          <option value="">-- Choisir --</option>
+          <option value="ordinateur">💻 Ordinateur</option>
+          <option value="smartphone">📱 Smartphone</option>
+          <option value="tablette">📱 Tablette</option>
+          <option value="imprimante">🖨️ Imprimante</option>
+          <option value="reseau">🌐 Réseau</option>
+          <option value="photo">📷 Photos</option>
+          <option value="application">💬 Application</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Marque *</label>
+        <input type="text" id="deviceBrand" placeholder="Ex: Samsung, HP, Apple...">
+      </div>
+      <div class="form-group">
+        <label>Modèle *</label>
+        <input type="text" id="deviceModel" placeholder="Ex: Galaxy A55, DeskJet 2820e...">
+      </div>
+      <div class="form-group">
+        <label>Numéro de modèle</label>
+        <input type="text" id="deviceModelNum">
+      </div>
+      <div class="form-group">
+        <label>Système d'exploitation</label>
+        <input type="text" id="deviceOS" placeholder="Ex: Windows 11, Android 14...">
+      </div>
+      <div class="form-group">
+        <label>Numéro de série</label>
+        <input type="text" id="deviceSerial">
+      </div>
+      <div class="form-group">
+        <label>Client associé</label>
+        <select id="deviceClient">
+          <option value="">-- Aucun --</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Notes</label>
+        <textarea id="deviceNotes"></textarea>
+      </div>
+      <button class="btn btn-primary" onclick="devicesModule.save()">💾 Enregistrer</button>
+      <button class="btn btn-danger" id="btnDeleteDevice" style="display:none" onclick="devicesModule.deleteCurrent()">🗑️ Supprimer</button>
+    </div>
+  </div>
+
+  <!-- MODAL: Filters -->
+  <div class="modal-overlay" id="modal-filters">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title">Filtres</div>
+        <button class="modal-close" onclick="app.closeModal('modal-filters')">&times;</button>
+      </div>
+      <div class="form-group">
+        <label>Client</label>
+        <select id="filterClient" onchange="interventionsModule.applyFilters()">
+          <option value="">Tous</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Statut</label>
+        <select id="filterStatus" onchange="interventionsModule.applyFilters()">
+          <option value="">Tous</option>
+          <option value="en-cours">En cours</option>
+          <option value="resolu">Résolu</option>
+          <option value="non-resolu">Non résolu</option>
+          <option value="a-revoir">À revoir</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Catégorie</label>
+        <select id="filterCategory" onchange="interventionsModule.applyFilters()">
+          <option value="">Toutes</option>
+          <option value="ordinateur">Ordinateur</option>
+          <option value="smartphone">Smartphone</option>
+          <option value="tablette">Tablette</option>
+          <option value="imprimante">Imprimante</option>
+          <option value="whatsapp">WhatsApp</option>
+          <option value="photos">Photos</option>
+          <option value="email">E-mail</option>
+          <option value="wifi">Wi-Fi</option>
+          <option value="internet">Internet</option>
+          <option value="sauvegarde">Sauvegarde</option>
+          <option value="applications">Applications</option>
+          <option value="autre">Autre</option>
+        </select>
+      </div>
+      <button class="btn btn-secondary" onclick="interventionsModule.resetFilters()">Réinitialiser</button>
+    </div>
+  </div>
+
+  <!-- PIN Overlay -->
+  <div class="pin-overlay" id="pinOverlay">
+    <h2 style="margin-bottom:8px">🔒 Assistant Numérique</h2>
+    <p style="color:var(--text-secondary);margin-bottom:24px">Entrez votre code PIN</p>
+    <div class="pin-display" id="pinDisplay">
+      <div class="pin-dot"></div>
+      <div class="pin-dot"></div>
+      <div class="pin-dot"></div>
+      <div class="pin-dot"></div>
+    </div>
+    <div class="pin-pad">
+      <button class="pin-btn" onclick="securityModule.enterPin(1)">1</button>
+      <button class="pin-btn" onclick="securityModule.enterPin(2)">2</button>
+      <button class="pin-btn" onclick="securityModule.enterPin(3)">3</button>
+      <button class="pin-btn" onclick="securityModule.enterPin(4)">4</button>
+      <button class="pin-btn" onclick="securityModule.enterPin(5)">5</button>
+      <button class="pin-btn" onclick="securityModule.enterPin(6)">6</button>
+      <button class="pin-btn" onclick="securityModule.enterPin(7)">7</button>
+      <button class="pin-btn" onclick="securityModule.enterPin(8)">8</button>
+      <button class="pin-btn" onclick="securityModule.enterPin(9)">9</button>
+      <button class="pin-btn" onclick="securityModule.clearPin()">C</button>
+      <button class="pin-btn" onclick="securityModule.enterPin(0)">0</button>
+      <button class="pin-btn" onclick="securityModule.backspacePin()">⌫</button>
+    </div>
+    <button class="btn btn-secondary" style="margin-top:24px;max-width:200px" onclick="securityModule.forgotPin()">Mot de passe oublié</button>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast"></div>
+
+  <!-- Hidden file inputs -->
+  <input type="file" id="importFile" accept=".json" style="display:none" onchange="backupModule.handleImport(this)">
+  <input type="file" id="photoInput" accept="image/*" capture="environment" style="display:none" onchange="interventionsModule.handlePhoto(this)">
+
+  <!-- Scripts -->
+  <script src="js/db.js"></script>
+  <script src="js/clients.js"></script>
+  <script src="js/devices.js"></script>
+  <script src="js/interventions.js"></script>
+  <script src="js/documentation.js"></script>
+  <script src="js/checklists.js"></script>
+  <script src="js/ai.js"></script>
+  <script src="js/google-drive.js"></script>
+  <script src="js/backup.js"></script>
+  <script src="js/security.js"></script>
+  <script src="js/settings.js"></script>
+  <script src="js/app.js"></script>
+
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('service-worker.js').catch(() => {});
+    }
+  </script>
+</body>
+</html>
