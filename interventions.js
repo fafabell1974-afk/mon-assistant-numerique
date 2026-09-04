@@ -141,27 +141,7 @@ const interventionsModule = {
         if (device) {
           deviceHtml = `<a href="#" onclick="app.goTo('device-detail', {deviceId:'${device.id}'})">${device.brand} ${device.model}</a>`;
         }
-
-        // Formater les checklists si présentes
-        let checklistsHtml = '';
-        if (int.checklists && int.checklists.length > 0) {
-          checklistsHtml = '<div style="margin-top:12px"><strong>Checklists :</strong><ul style="margin-top:4px;list-style:none;padding:0">';
-          int.checklists.forEach(cl => {
-            checklistsHtml += `<li style="font-size:0.85rem;margin-bottom:2px"> ${cl.done ? '✅' : '⬛'} ${cl.title}</li>`;
-          });
-          checklistsHtml += '</ul></div>';
-        }
         
-        // Formater les photos si présentes
-        let photosHtml = '';
-        if (int.photos && int.photos.length > 0) {
-          photosHtml = '<div style="margin-top:12px"><strong>Photos :</strong><div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(80px, 1fr));gap:6px;margin-top:4px">';
-          int.photos.forEach(photoBase64 => {
-            photosHtml += `<img src="${photoBase64}" style="width:100%;height:60px;object-fit:cover;border-radius:4px" onclick="app.openPhotoViewer('${photoBase64}')">`;
-          });
-          photosHtml += '</div></div>';
-        }
-
         content.innerHTML = `
           <div class="card">
             <div style="display:flex;justify-content:space-between;align-items:start">
@@ -180,15 +160,8 @@ const interventionsModule = {
           </div>
           
           <div class="card">
-            <p><strong>Diagnostic / Solution technique :</strong></p>
-            <p style="font-size:0.9rem;margin-top:4px;white-space:pre-wrap;color:var(--primary)">${int.diagnostic || 'Non renseigné'}</p>
-          </div>
-          
-          <div class="card">
             <p><strong>Actions effectuées :</strong></p>
             <p style="font-size:0.9rem;margin-top:4px;white-space:pre-wrap">${int.actions}</p>
-            ${checklistsHtml}
-            ${photosHtml}
           </div>
           
           <div class="card">
@@ -218,9 +191,7 @@ const interventionsModule = {
       date: new Date().toISOString(),
       clientId: clientId || null,
       deviceId: deviceId || null,
-      status: 'en-cours',
-      checklists: [],
-      photos: []
+      status: 'en-cours'
     };
     app.goTo('intervention-wizard');
     this.showStep(1);
@@ -326,30 +297,14 @@ const interventionsModule = {
         if (this.wizardData.description) document.getElementById('wzDescription').value = this.wizardData.description;
         break;
         
-      case 4: // Diagnostic / Solution technique
+      case 4: // Aide à la recherche (IA / Doc)
         html = `
-          <h3>Étape 4 : Diagnostic technique</h3>
-          <p style="font-size:0.85rem;color:var(--text-secondary);margin-bottom:8px">Ce que vous avez trouvé, la solution technique.</p>
-          <div class="form-group">
-            <textarea id="wzDiagnostic" style="height:200px;color:var(--primary)" placeholder="Expliquez techniquement le problème et la solution à apporter."></textarea>
-          </div>
-          <div class="btn-row" style="margin-top:16px">
-            <button class="btn btn-secondary" onclick="interventionsModule.prevStep()">← Précédent</button>
-            <button class="btn btn-primary" onclick="interventionsModule.nextStep()">Suivant →</button>
-          </div>
-        `;
-        cont.innerHTML = html;
-        if (this.wizardData.diagnostic) document.getElementById('wzDiagnostic').value = this.wizardData.diagnostic;
-        break;
-        
-      case 5: // Aide à la recherche (IA / Doc)
-        html = `
-          <h3>Étape 5 : Outils d'aide</h3>
+          <h3>Étape 4 : Recherche & Aide</h3>
+          <p>Utilisez l'IA ou la documentation pour diagnostiquer le problème.</p>
           <div class="btn-row">
             <button class="btn btn-secondary" onclick="app.goTo('ai', {prompt: interventionsModule.wizardData.description, clientId: interventionsModule.wizardData.clientId, deviceId: interventionsModule.wizardData.deviceId})">🤖 Demander à l'IA</button>
             <button class="btn btn-secondary" onclick="app.goTo('documentation')">📚 Voir la documentation</button>
           </div>
-          <p style="margin-top:16px;font-size:0.85rem;color:var(--text-secondary)">Appuyez sur "Suivant" une fois votre recherche terminée.</p>
           <div class="btn-row" style="margin-top:16px">
             <button class="btn btn-secondary" onclick="interventionsModule.prevStep()">← Précédent</button>
             <button class="btn btn-primary" onclick="interventionsModule.nextStep()">Suivant →</button>
@@ -358,28 +313,17 @@ const interventionsModule = {
         cont.innerHTML = html;
         break;
         
-      case 6: // Actions effectuées (Checklists, Photos)
+      case 5: // Actions effectuées
         html = `
-          <h3>Étape 6 : Intervention en cours</h3>
+          <h3>Étape 5 : Intervention en cours</h3>
           <div class="form-group">
             <label>Durée estimée (minutes)</label>
             <input type="number" id="wzDuration" value="30" step="15" min="15">
           </div>
           <div class="form-group">
             <label>Actions effectuées</label>
-            <textarea id="wzActions" style="height:120px" placeholder="Décrivez les manipulations faites..."></textarea>
+            <textarea id="wzActions" style="height:200px" placeholder="Décrivez les manipulations faites..."></textarea>
           </div>
-          
-          <div style="margin-top:16px">
-            <button class="btn btn-sm btn-secondary" onclick="interventionsModule.openChecklistSelection()">📋 Ajouter checklist</button>
-            <div id="wzChecklistsCont" style="margin-top:8px"></div>
-          </div>
-          
-          <div style="margin-top:16px">
-            <button class="btn btn-sm btn-secondary" onclick="interventionsModule.capturePhoto()">📷 Prendre photo</button>
-            <div id="wzPhotosCont" style="display:grid;grid-template-columns:repeat(auto-fill, minmax(70px, 1fr));gap:6px;margin-top:8px"></div>
-          </div>
-          
           <div class="btn-row" style="margin-top:16px">
             <button class="btn btn-secondary" onclick="interventionsModule.prevStep()">← Précédent</button>
             <button class="btn btn-primary" onclick="interventionsModule.nextStep()">Suivant →</button>
@@ -388,20 +332,16 @@ const interventionsModule = {
         cont.innerHTML = html;
         if (this.wizardData.duration) document.getElementById('wzDuration').value = this.wizardData.duration;
         if (this.wizardData.actions) document.getElementById('wzActions').value = this.wizardData.actions;
-        this.updateWizardChecklistsDisplay();
-        this.updateWizardPhotosDisplay();
         break;
         
-      case 7: // Compte-rendu Client et Statut
+      case 6: // Compte-rendu Client et Statut
         html = `
-          <h3>Étape 7 : Compte-rendu pour le client</h3>
-          <p style="font-size:0.85rem;color:var(--text-secondary);margin-bottom:8px">Rédigez le texte qui sera affiché sur la facture ou le rapport.</p>
+          <h3>Étape 6 : Compte-rendu & Fin</h3>
           <div class="form-group">
-            <textarea id="wzCRClient" style="height:180px" placeholder="Monsieur, j'ai effectué... La solution est..."></textarea>
+            <label>Compte-rendu pour le client (Visible sur facture)</label>
+            <textarea id="wzCRClient" style="height:150px" placeholder="Monsieur, j'ai effectué... La solution est..."></textarea>
           </div>
-          <button class="btn btn-sm btn-secondary" onclick="interventionsModule.generateClientCR()">🤖 Générer via IA</button>
-          
-          <div class="form-group" style="margin-top:16px">
+          <div class="form-group">
             <label>Statut final de l'intervention</label>
             <select id="wzStatus">
               <option value="en-cours" class="status-pending">En cours</option>
@@ -410,7 +350,6 @@ const interventionsModule = {
               <option value="a-revoir" class="status-review">À revoir</option>
             </select>
           </div>
-          
           <div class="btn-row" style="margin-top:20px">
             <button class="btn btn-secondary" onclick="interventionsModule.prevStep()">← Précédent</button>
             <button class="btn btn-success" onclick="interventionsModule.finishWizard()">💾 Terminer & Enregistrer</button>
@@ -439,15 +378,11 @@ const interventionsModule = {
         this.wizardData.title = document.getElementById('wzTitle').value.trim();
         this.wizardData.description = document.getElementById('wzDescription').value.trim();
         break;
-      case 4:
-        this.wizardData.diagnostic = document.getElementById('wzDiagnostic').value.trim();
-        break;
-      case 6:
+      case 5:
         this.wizardData.duration = parseInt(document.getElementById('wzDuration').value) || 30;
         this.wizardData.actions = document.getElementById('wzActions').value.trim();
-        // Checklists et photos sont déjà dans wizardData via leurs fonctions respectives
         break;
-      case 7:
+      case 6:
         this.wizardData.compteRenduClient = document.getElementById('wzCRClient').value.trim();
         this.wizardData.status = document.getElementById('wzStatus').value;
         break;
@@ -457,22 +392,29 @@ const interventionsModule = {
     dbModule.save('interventions', this.wizardData);
   },
 
-  // === Utilitaires pour le Wizard ===
+  // === Utilitaires pour le Wizard (Correction apportée ici) ===
 
+  // Remplir le sélecteur de clients
   populateClientSelect: function() {
     const select = document.getElementById('wzClient');
+    if (!select) return;
+    
     dbModule.getAll('clients').then(clients => {
+      // Trier par nom et ajouter les options
       clients.sort((a, b) => a.nom.localeCompare(b.nom)).forEach(client => {
         const option = document.createElement('option');
         option.value = client.id;
         option.textContent = `${client.nom} ${client.prenom}`;
+        // Pré-sélectionner si déjà défini
         if (client.id === this.wizardData.clientId) option.selected = true;
         select.appendChild(option);
       });
+      // Activer le bouton suivant si un client est déjà sélectionné
       if (this.wizardData.clientId) this.onWizardClientChange(this.wizardData.clientId);
     });
   },
   
+  // Gérer le changement de client
   onWizardClientChange: function(value) {
     const nextBtn = document.getElementById('wzNext1');
     if (value === 'NEW') {
@@ -485,13 +427,18 @@ const interventionsModule = {
     }
   },
   
+  // Remplir le sélecteur d'appareils (filtré par client)
   populateDeviceSelect: function() {
     const select = document.getElementById('wzDevice');
-    
+    if (!select) return;
+
+    // Récupérer le nom du client pour affichage
     dbModule.get('clients', this.wizardData.clientId).then(client => {
       if (client) document.getElementById('wzClientName').textContent = `${client.nom} ${client.prenom}`;
       
+      // Récupérer les appareils du client
       dbModule.getAllByIndex('devices', 'clientId', this.wizardData.clientId).then(devices => {
+        // Trier et ajouter les options
         devices.sort((a, b) => a.brand.localeCompare(b.brand)).forEach(device => {
           const option = document.createElement('option');
           option.value = device.id;
@@ -499,6 +446,7 @@ const interventionsModule = {
           if (device.id === this.wizardData.deviceId) option.selected = true;
           select.appendChild(option);
         });
+        // Activer bouton suivant si appareil ou 'NONE' est sélectionné
         if (this.wizardData.deviceId || document.getElementById('wzDevice').value) {
           this.onWizardDeviceChange(document.getElementById('wzDevice').value || this.wizardData.deviceId);
         }
@@ -506,6 +454,7 @@ const interventionsModule = {
     });
   },
   
+  // Gérer le changement d'appareil
   onWizardDeviceChange: function(value) {
     const nextBtn = document.getElementById('wzNext2');
     if (value === 'NEW') {
@@ -516,134 +465,6 @@ const interventionsModule = {
     } else {
       nextBtn.disabled = true;
     }
-  },
-
-  // --- Gestion Checklists dans le Wizard ---
-  openChecklistSelection: function() {
-    // Cette partie nécessiterait une modale pour choisir parmi les checklists existantes
-    // Pour simplifier ici, on va charger une checklist "Générale"
-    if (!confirm('Ajouter la checklist générale "Ordinateur Lent" ?')) return;
-    
-    // Checklist factice pour la démo
-    const fakeCL = {
-      title: "Vérification Ordinateur Lent",
-      items: [
-        { task: "Vérifier espace disque", done: false },
-        { task: "Scanner Antivirus", done: false },
-        { task: "Nettoyer fichiers temporaires", done: false },
-        { task: "Vérifier programmes au démarrage", done: false }
-      ]
-    };
-    
-    this.addChecklistToWizard(fakeCL);
-  },
-  
-  addChecklistToWizard: function(checklist) {
-    checklist.items.forEach(item => {
-      this.wizardData.checklists.push({
-        title: checklist.title + ' - ' + item.task,
-        done: item.done
-      });
-    });
-    this.updateWizardChecklistsDisplay();
-  },
-  
-  updateWizardChecklistsDisplay: function() {
-    const cont = document.getElementById('wzChecklistsCont');
-    if (!cont) return;
-    cont.innerHTML = '';
-    
-    this.wizardData.checklists.forEach((item, index) => {
-      const div = document.createElement('div');
-      div.style = 'display:flex;align-items:center;margin-bottom:4px;font-size:0.85rem';
-      
-      const checkbox = document.createElement('input');
-      checkbox.type = 'checkbox';
-      checkbox.checked = item.done;
-      checkbox.style.marginRight = '8px';
-      checkbox.onchange = (e) => {
-        this.wizardData.checklists[index].done = e.target.checked;
-        dbModule.save('interventions', this.wizardData);
-      };
-      
-      const label = document.createElement('span');
-      label.textContent = item.title;
-      
-      const remove = document.createElement('span');
-      remove.textContent = ' 🗑️';
-      remove.style = 'margin-left:auto;cursor:pointer;opacity:0.5';
-      remove.onclick = () => {
-        this.wizardData.checklists.splice(index, 1);
-        this.updateWizardChecklistsDisplay();
-        dbModule.save('interventions', this.wizardData);
-      };
-      
-      div.appendChild(checkbox);
-      div.appendChild(label);
-      div.appendChild(remove);
-      cont.appendChild(div);
-    });
-  },
-
-  // --- Gestion Photos dans le Wizard ---
-  capturePhoto: function() {
-    const input = document.getElementById('photoInput');
-    if (input) input.click();
-  },
-  
-  handlePhoto: function(input) {
-    if (input.files && input.files[0]) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        // Pour une vraie app, il faudrait compresser l'image avant de la stocker (trop lourd pour IndexedDB)
-        this.wizardData.photos.push(e.target.result);
-        this.updateWizardPhotosDisplay();
-        dbModule.save('interventions', this.wizardData);
-      };
-      reader.readAsDataURL(input.files[0]);
-    }
-  },
-  
-  updateWizardPhotosDisplay: function() {
-    const cont = document.getElementById('wzPhotosCont');
-    if (!cont) return;
-    cont.innerHTML = '';
-    
-    this.wizardData.photos.forEach((photoBase64, index) => {
-      const div = document.createElement('div');
-      div.style.position = 'relative';
-      
-      const img = document.createElement('img');
-      img.src = photoBase64;
-      img.style = 'width:100%;height:60px;object-fit:cover;border-radius:4px';
-      
-      const remove = document.createElement('span');
-      remove.textContent = '×';
-      remove.style = 'position:absolute;top:-4px;right:-4px;background:rgba(255,255,255,0.7);color:red;border-radius:50%;width:18px;height:18px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-weight:bold';
-      remove.onclick = () => {
-        this.wizardData.photos.splice(index, 1);
-        this.updateWizardPhotosDisplay();
-        dbModule.save('interventions', this.wizardData);
-      };
-      
-      div.appendChild(img);
-      div.appendChild(remove);
-      cont.appendChild(div);
-    });
-  },
-
-  // --- IA pour Compte-rendu ---
-  generateClientCR: function() {
-    if (!confirm('Générer le compte-rendu client via l\'IA en se basant sur le diagnostic ?')) return;
-    
-    app.showToast('Génération IA en cours...');
-    
-    // Simuler un appel IA
-    setTimeout(() => {
-      const cr = `Monsieur, suite à votre demande, j'ai pris en charge votre appareil. Le diagnostic technique a révélé le problème suivant : ${this.wizardData.diagnostic}. J'ai effectué les actions nécessaires (${this.wizardData.actions}) pour résoudre la situation. L'appareil est désormais fonctionnel. Cordialement.`;
-      document.getElementById('wzCRClient').value = cr;
-      app.showToast('Compte-rendu généré.');
-    }, 2000);
   },
 
   // === Finir le Wizard et Enregistrer ===
