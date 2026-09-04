@@ -1,144 +1,202 @@
+// js/ai.js
+// Gestion de l'intégration avec l'Assistant IA
+
 const aiModule = {
-  async init() {
-    const clients = await dbModule.getAll('clients');
-    const opts = clients.map(c => `<option value="${c.id}">${c.prenom} ${c.nom}</option>`).join('');
-    const sel = document.getElementById('aiClientSelect');
-    if (sel) sel.innerHTML = '<option value="">-- Client --</option>' + opts;
+  // Configuration locale (clés stockées dans IndexedDB via settingsModule)
+  config: {
+    provider: '', // openai, gemini, mistral
+    apiKey: '',
+    model: ''
   },
-
-  async loadClientDevices(clientId) {
-    const sel = document.getElementById('aiDeviceSelect');
-    if (!clientId) { sel.innerHTML = '<option value="">-- Appareil --</option>'; return; }
-    const devices = await dbModule.getByIndex('devices', 'clientId', parseInt(clientId));
-    const opts = devices.map(d => `<option value="${d.id}">${d.brand} ${d.model}</option>`).join('');
-    sel.innerHTML = '<option value="">-- Appareil --</option>' + opts;
+  
+  init: function() {
+    console.log('AI module initialized');
+    this.loadConfig();
   },
-
-  async ask() {
-    const prompt = document.getElementById('aiPrompt').value.trim();
-    if (!prompt) { app.toast('Veuillez décrire le problème'); return; }
-    const deviceId = document.getElementById('aiDeviceSelect').value;
-    const clientId = document.getElementById('aiClientSelect').value;
-    const device = deviceId ? await dbModule.get('devices', parseInt(deviceId)) : null;
-    const client = clientId ? await dbModule.get('clients', parseInt(clientId)) : null;
-
-    document.getElementById('aiResponse').innerHTML = '<div class="empty-state">⏳ Analyse en cours...</div>';
-    const response = await this.sendPrompt(prompt, device, client);
-    document.getElementById('aiResponse').innerHTML = `<div class="ai-response">${response}</div>`;
+  
+  // Charger la configuration IA depuis les paramètres
+  loadConfig: function() {
+    dbModule.get('settings', 'aiProvider').then(res => if(res) this.config.provider = res.value);
+    dbModule.get('settings', 'aiApiKey').then(res => if(res) this.config.apiKey = res.value);
+    dbModule.get('settings', 'aiModel').then(res => if(res) this.config.model = res.value);
   },
-
-  async sendPrompt(userPrompt, device, client) {
-    const provider = await dbModule.getSetting('aiProvider', '');
-    const apiKey = await dbModule.getSetting('aiApiKey', '');
-    const model = await dbModule.getSetting('aiModel', '');
-
-    if (!provider || !apiKey) {
-      return '<p style="color:var(--danger)"><strong>Configuration IA manquante</strong></p><p>Rendez-vous dans Paramètres → IA pour configurer votre clé API.</p>';
-    }
-    if (!navigator.onLine) {
-      return '<p style="color:var(--danger)"><strong>Hors ligne</strong></p><p>L'IA nécessite une connexion Internet.</p>';
-    }
-
-    let systemPrompt = "Tu es un assistant technique expert en support informatique à domicile pour seniors. Tu réponds en français de manière claire, structurée et concise avec des étapes numérotées. Tu ne dois pas inventer de procédures complexes. Si tu n'es pas sûr, dis-le clairement en indiquant 'Information non vérifiée — rechercher dans la documentation officielle.'";
-    let context = "";
-    if (device) context += `Appareil: ${device.brand} ${device.model} (${device.os || 'OS inconnu'}). `;
-    if (client) context += `Client: ${client.prenom} ${client.nom}. `;
-
-    try {
-      if (provider === 'openai') return await this.callOpenAI(apiKey, model || 'gpt-4o-mini', systemPrompt, context + userPrompt);
-      if (provider === 'gemini') return await this.callGemini(apiKey, model || 'gemini-1.5-flash', systemPrompt, context + userPrompt);
-      if (provider === 'mistral') return await this.callMistral(apiKey, model || 'mistral-small-latest', systemPrompt, context + userPrompt);
-      return '<p style="color:var(--danger)">Fournisseur non supporté</p>';
-    } catch (e) {
-      return `<p style="color:var(--danger)"><strong>Erreur API</strong></p><p>${e.message}</p>`;
-    }
-  },
-
-  async callOpenAI(key, model, system, prompt) {
-    const res = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model, messages: [{ role: 'system', content: system }, { role: 'user', content: prompt }], temperature: 0.3 })
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error?.message || 'Erreur OpenAI');
-    return this.formatResponse(data.choices[0].message.content);
-  },
-
-  async callGemini(key, model, system, prompt) {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ contents: [{ parts: [{ text: system + '
-
-' + prompt }] }] })
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error?.message || 'Erreur Gemini');
-    return this.formatResponse(data.candidates[0].content.parts[0].text);
-  },
-
-  async callMistral(key, model, system, prompt) {
-    const res = await fetch('https://api.mistral.ai/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model, messages: [{ role: 'system', content: system }, { role: 'user', content: prompt }], temperature: 0.3 })
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error?.message || 'Erreur Mistral');
-    return this.formatResponse(data.choices[0].message.content);
-  },
-
-  formatResponse(text) {
-    // Convert markdown-like to HTML
-    let html = text
-      .replace(/#{3}\s+(.*)/g, '<h4>$1</h4>')
-      .replace(/#{2}\s+(.*)/g, '<h3>$1</h3>')
-      .replace(/#{1}\s+(.*)/g, '<h2>$1</h2>')
-      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-      .replace(/\*(.*?)\*/g, '<em>$1</em>');
-
-    // Handle numbered lists
-    const lines = html.split('
-');
-    let inList = false;
-    let result = [];
-    for (const line of lines) {
-      const match = line.match(/^\d+\.\s+(.*)/);
-      if (match) {
-        if (!inList) { result.push('<ol>'); inList = true; }
-        result.push(`<li>${match[1]}</li>`);
-      } else {
-        if (inList) { result.push('</ol>'); inList = false; }
-        result.push(line);
-      }
-    }
-    if (inList) result.push('</ol>');
-    html = result.join('<br>');
-    return html;
-  },
-
-  async testConnection() {
-    const provider = document.getElementById('aiProvider').value;
-    const key = document.getElementById('aiApiKey').value.trim();
-    const model = document.getElementById('aiModel').value.trim();
-    if (!provider || !key) { app.toast('Renseignez le fournisseur et la clé API'); return; }
-    await dbModule.setSetting('aiProvider', provider);
-    await dbModule.setSetting('aiApiKey', key);
-    await dbModule.setSetting('aiModel', model);
-    app.toast('Test en cours...');
-    try {
-      const res = await this.sendPrompt("Dis simplement 'Connexion OK' en français.", null, null);
-      if (res.toLowerCase().includes('ok')) app.toast('✅ Connexion réussie');
-      else app.toast('⚠️ Réponse inattendue');
-    } catch (e) {
-      app.toast('❌ ' + e.message);
-    }
-  },
-
-  clear() {
+  
+  // Réinitialiser le formulaire IA
+  resetForm: function() {
+    document.getElementById('aiClientSelect').value = '';
+    document.getElementById('aiDeviceSelect').innerHTML = '<option value="">-- Appareil --</option>';
     document.getElementById('aiPrompt').value = '';
     document.getElementById('aiResponse').innerHTML = '';
+  },
+  
+  // Charger les appareils d'un client dans le sélecteur
+  loadClientDevices: function(clientId) {
+    const deviceSelect = document.getElementById('aiDeviceSelect');
+    deviceSelect.innerHTML = '<option value="">-- Appareil --</option>';
+    
+    if (!clientId) return;
+    
+    dbModule.getAllByIndex('devices', 'clientId', clientId).then(devices => {
+      devices.forEach(device => {
+        const option = document.createElement('option');
+        option.value = device.id;
+        option.textContent = `${devicesModule.categories[device.category].split(' ')[0]} ${device.brand} ${device.model}`;
+        deviceSelect.appendChild(option);
+      });
+    });
+  },
+  
+  // Poser une question à l'IA
+  ask: function() {
+    const prompt = document.getElementById('aiPrompt').value.trim();
+    if (!prompt) {
+      app.showToast('Veuillez décrire le problème.');
+      return;
+    }
+    
+    if (!this.config.apiKey) {
+      if(confirm('Clé API IA non configurée. Voulez-vous la configurer maintenant ?')) {
+        app.goTo('settings');
+      }
+      return;
+    }
+    
+    const askBtn = document.getElementById('aiAskBtn');
+    askBtn.disabled = true;
+    askBtn.textContent = '⏳ Recherche...';
+    document.getElementById('aiResponse').innerHTML = '<div class="loading-state">L\'IA réfléchit...</div>';
+    
+    // Obtenir le contexte (client/appareil)
+    const clientId = document.getElementById('aiClientSelect').value;
+    const deviceId = document.getElementById('aiDeviceSelect').value;
+    
+    // Anonymiser le contexte avant l'envoi
+    this.getAnonymizedContext(clientId, deviceId).then(context => {
+      const fullPrompt = `${context}\n\nDescription du problème technique :\n${prompt}`;
+      
+      this.callApi(fullPrompt).then(response => {
+        askBtn.disabled = false;
+        askBtn.textContent = '💬 Demander à l\'IA';
+        this.displayResponse(response);
+      }).catch(error => {
+        askBtn.disabled = false;
+        askBtn.textContent = '💬 Demander à l\'IA';
+        this.displayError(error);
+      });
+    });
+  },
+  
+  // Anonymiser les données client/appareil
+  getAnonymizedContext: function(clientId, deviceId) {
+    return new Promise((resolve) => {
+      let context = 'Contexte : ';
+      const promises = [];
+      
+      if (clientId) promises.push(dbModule.get('clients', clientId));
+      else promises.push(Promise.resolve(null));
+      
+      if (deviceId) promises.push(dbModule.get('devices', deviceId));
+      else promises.push(Promise.resolve(null));
+      
+      Promise.all(promises).then(([client, device]) => {
+        if (client) context += `Client anonyme (ID: ${client.id.substring(0,4)}), `;
+        else context += 'Client inconnu, ';
+        
+        if (device) context += `Appareil: ${device.brand} ${device.model} (${device.os || 'OS inconnu'}), `;
+        else context += 'Appareil inconnu. ';
+        
+        resolve(context);
+      });
+    });
+  },
+  
+  // Appel à l'API du fournisseur d'IA
+  callApi: function(prompt) {
+    switch(this.config.provider) {
+      case 'openai': return this.callOpenAi(prompt);
+      // case 'gemini': return this.callGemini(prompt);
+      // case 'mistral': return this.callMistral(prompt);
+      default: return Promise.reject(new Error('Fournisseur IA non pris en charge.'));
+    }
+  },
+  
+  // Appel spécifique à OpenAI
+  callOpenAi: function(prompt) {
+    const url = 'https://api.openai.com/v1/chat/completions';
+    const model = this.config.model || 'gpt-4o-mini';
+    
+    const body = {
+      model: model,
+      messages: [
+        { role: 'system', content: 'Tu es un assistant technique expert pour assistant numérique à domicile. Propose des diagnostics clairs, des étapes de résolution concrètes et des points de vigilance.' },
+        { role: 'user', content: prompt }
+      ],
+      temperature: 0.7
+    };
+    
+    return fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${this.config.apiKey}`
+      },
+      body: JSON.stringify(body)
+    }).then(response => {
+      if (!response.ok) {
+        return response.json().then(err => {
+          throw new Error(err.error?.message || 'Erreur API OpenAI');
+        });
+      }
+      return response.json();
+    }).then(data => {
+      return data.choices[0].message.content;
+    });
+  },
+  
+  // Afficher la réponse de l'IA
+  displayResponse: function(response) {
+    const respCont = document.getElementById('aiResponse');
+    respCont.innerHTML = `<div class="card-title">Solution suggérée</div><div class="card-content markdown-body" style="font-size:0.9rem;white-space:pre-wrap;margin-top:10px">${this.formatMarkdown(response)}</div>`;
+  },
+  
+  // Afficher une erreur
+  displayError: function(error) {
+    const respCont = document.getElementById('aiResponse');
+    respCont.innerHTML = `<div class="danger-state"><strong>Erreur :</strong> ${error.message}</div>`;
+    console.error('AI Error:', error);
+  },
+  
+  // Formater succinctement le Markdown en HTML (pour démo)
+  formatMarkdown: function(text) {
+    return text
+      .replace(/^### (.*$)/gim, '<h3>$1</h3>')
+      .replace(/^## (.*$)/gim, '<h2>$1</h2>')
+      .replace(/^# (.*$)/gim, '<h1>$1</h1>')
+      .replace(/\*\*(.*)\*\*/gim, '<strong>$1</strong>')
+      .replace(/\*(.*)\*/gim, '<em>$1</em>')
+      .replace(/^\- (.*$)/gim, '<li>$1</li>')
+      .replace(/\n/g, '<br>');
+  },
+  
+  // Effacer le formulaire
+  clear: function() {
+    this.resetForm();
+  },
+  
+  // Tester la connexion (dans les paramètres)
+  testConnection: function() {
+    this.loadConfig();
+    if (!this.config.apiKey) {
+      app.showToast('Clé API non configurée.');
+      return;
+    }
+    
+    app.showToast('Test de connexion en cours...');
+    this.callApi('Ceci est un test de connexion pour l\'application Assistant Numérique. Réponds simplement "Connecté !".').then(resp => {
+      if (resp.includes('Connecté !')) app.showToast('Connexion IA réussie ! ✅');
+      else app.showToast('Connexion réussie, mais réponse inattendue.');
+    }).catch(err => {
+      app.showToast(`Échec de connexion : ${err.message}`);
+    });
   }
 };
