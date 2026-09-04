@@ -1,223 +1,216 @@
+// js/app.js
+// Logique principale de l'application et gestion de la navigation
+
 const app = {
   currentSection: 'dashboard',
   currentClientId: null,
   currentDeviceId: null,
   currentInterventionId: null,
-  editingClientId: null,
-  editingDeviceId: null,
 
-  async init() {
-    await dbModule.init();
-    this.updateOnlineStatus();
-    window.addEventListener('online', () => this.updateOnlineStatus());
-    window.addEventListener('offline', () => this.updateOnlineStatus());
-
-    // Theme
-    const savedTheme = await dbModule.getSetting('theme', 'light');
-    if (savedTheme === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
-
-    // Populate selects
-    await this.populateSelects();
-
-    // Refresh all views
-    this.refreshAll();
-
-    // Security
-    await securityModule.init();
-
-    // Google Drive init
+  init: function() {
+    console.log('App initialization...');
+    
+    // Initialisation des modules
+    dbModule.init();
+    clientsModule.init();
+    devicesModule.init();
+    interventionsModule.init();
+    documentationModule.init();
+    checklistsModule.init();
+    aiModule.init();
     googleDriveModule.init();
+    backupModule.init();
+    securityModule.init();
+    settingsModule.init();
 
-    app.toast('Assistant Numérique prêt');
+    // Gestion du statut en ligne/hors ligne
+    window.addEventListener('online', this.updateOnlineStatus.bind(this));
+    window.addEventListener('offline', this.updateOnlineStatus.bind(this));
+    this.updateOnlineStatus();
+
+    // Charger les stats du tableau de bord
+    this.loadDashboardStats();
+
+    // Vérifier si un code PIN est requis
+    securityModule.checkPinRequired();
   },
 
-  updateOnlineStatus() {
-    const online = navigator.onLine;
-    const dot = document.getElementById('statusDot');
-    const text = document.getElementById('statusText');
-    if (online) {
-      dot.classList.add('online');
-      text.textContent = 'En ligne';
+  // Gestion de la navigation entre les sections
+  goTo: function(sectionId, data) {
+    console.log(`Navigating to section: ${sectionId}`);
+    
+    // Cacher toutes les sections
+    document.querySelectorAll('.section').forEach(sec => sec.classList.remove('active'));
+    // Afficher la section demandée
+    const targetSection = document.getElementById(`sec-${sectionId}`);
+    if (targetSection) {
+      targetSection.classList.add('active');
     } else {
-      dot.classList.remove('online');
-      text.textContent = 'Hors ligne';
+      console.error(`Section not found: sec-${sectionId}`);
+      return;
+    }
+
+    // Mettre à jour l'état de la navigation du bas
+    document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
+    const navItem = document.querySelector(`.nav-item[data-target="${sectionId}"]`);
+    if (navItem) {
+      navItem.classList.add('active');
+    }
+
+    // Mettre à jour l'URL (optionnel, mais utile pour le bouton 'retour')
+    // history.pushState({ section: sectionId }, '', `#${sectionId}`);
+
+    this.currentSection = sectionId;
+
+    // Charger les données spécifiques à la section si nécessaire
+    switch(sectionId) {
+      case 'dashboard':
+        this.loadDashboardStats();
+        break;
+      case 'clients':
+        clientsModule.loadList();
+        break;
+      case 'devices':
+        devicesModule.loadList();
+        break;
+      case 'interventions':
+        interventionsModule.loadList();
+        break;
+      case 'documentation':
+        documentationModule.loadList();
+        break;
+      case 'checklists':
+        checklistsModule.loadList();
+        break;
+      case 'settings':
+        settingsModule.load();
+        break;
+      case 'ai':
+        aiModule.resetForm();
+        break;
+      case 'intervention-wizard':
+        // Lancer l'assistant d'intervention si les données sont fournies
+        if (data && data.clientId) {
+          interventionsModule.startWizard(data.clientId, data.deviceId);
+        } else if (!data) {
+          interventionsModule.startWizard();
+        }
+        break;
+      case 'client-detail':
+        if (data && data.clientId) {
+          clientsModule.loadDetail(data.clientId);
+        }
+        break;
+      case 'device-detail':
+        if (data && data.deviceId) {
+          devicesModule.loadDetail(data.deviceId);
+        }
+        break;
+      case 'intervention-detail':
+        if (data && data.interventionId) {
+          interventionsModule.loadDetail(data.interventionId);
+        }
+        break;
     }
   },
 
-  goTo(section) {
-    document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
-    document.getElementById('sec-' + section)?.classList.add('active');
-    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-    document.querySelector(`.nav-item[data-target="${section}"]`)?.classList.add('active');
-    this.currentSection = section;
-    window.scrollTo(0, 0);
+  // Charger les statistiques sur le tableau de bord
+  loadDashboardStats: function() {
+    dbModule.getAll('clients').then(clients => {
+      document.getElementById('statClients').textContent = clients.length;
+      clientsModule.displayDashboardList(clients);
+    });
 
-    if (section === 'dashboard') this.refreshDashboard();
-    if (section === 'clients') clientsModule.render();
-    if (section === 'devices') devicesModule.render();
-    if (section === 'interventions') interventionsModule.render();
-    if (section === 'checklists') checklistsModule.render();
-    if (section === 'documentation') documentationModule.render();
-    if (section === 'ai') aiModule.init();
-    if (section === 'settings') settingsModule.load();
+    dbModule.getAll('interventions').then(interventions => {
+      const todayStr = new Date().toISOString().split('T')[0];
+      const todayInterventions = interventions.filter(int => int.date.startsWith(todayStr));
+      const doneInterventions = interventions.filter(int => int.status === 'resolu');
+      const pendingInterventions = interventions.filter(int => int.status === 'en-cours');
+
+      document.getElementById('statToday').textContent = todayInterventions.length;
+      document.getElementById('statDone').textContent = doneInterventions.length;
+      document.getElementById('statPending').textContent = pendingInterventions.length;
+
+      interventionsModule.displayDashboardList(interventions);
+    });
   },
 
-  openModal(id, data = {}) {
-    const modal = document.getElementById(id);
-    if (modal) modal.classList.add('active');
-    if (id === 'modal-client') clientsModule.prepareModal(data);
-    if (id === 'modal-device') devicesModule.prepareModal(data);
+  // Afficher les notifications (toasts)
+  showToast: function(message) {
+    const toast = document.getElementById('toast');
+    if (toast) {
+      toast.textContent = message;
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 3000);
+    }
   },
 
-  closeModal(id) {
-    const modal = document.getElementById(id);
-    if (modal) modal.classList.remove('active');
+  // Gestion de l'état de connexion
+  updateOnlineStatus: function() {
+    const statusDot = document.getElementById('statusDot');
+    const statusText = document.getElementById('statusText');
+    if (!statusDot || !statusText) return;
+
+    if (navigator.onLine) {
+      statusDot.classList.add('online');
+      statusText.textContent = 'En ligne';
+    } else {
+      statusDot.classList.remove('online');
+      statusText.textContent = 'Hors ligne';
+    }
   },
 
-  toast(message, duration = 2500) {
-    const t = document.getElementById('toast');
-    t.textContent = message;
-    t.classList.add('show');
-    setTimeout(() => t.classList.remove('show'), duration);
-  },
-
-  async populateSelects() {
-    const clients = await dbModule.getAll('clients');
-    const opts = clients.map(c => `<option value="${c.id}">${c.prenom} ${c.nom}</option>`).join('');
-
-    ['deviceClient', 'aiClientSelect', 'filterClient'].forEach(id => {
-      const el = document.getElementById(id);
-      if (el) {
-        const first = el.options[0]?.outerHTML || '';
-        el.innerHTML = first + opts;
+  // Ouvrir une modale
+  openModal: function(modalId, data) {
+    const modal = document.getElementById(modalId);
+    if (modal) {
+      modal.classList.add('active');
+      
+      // Gérer l'état de la modale en fonction des données fournies
+      if (modalId === 'modal-client') {
+        if (data && data.clientId) {
+          clientsModule.loadForm(data.clientId);
+        } else {
+          clientsModule.resetForm();
+        }
+      } else if (modalId === 'modal-device') {
+        if (data && data.deviceId) {
+          devicesModule.loadForm(data.deviceId);
+        } else if (data && data.clientId) {
+          devicesModule.resetForm(data.clientId);
+        } else {
+          devicesModule.resetForm();
+        }
+      } else if (modalId === 'modal-filters') {
+        interventionsModule.loadFilters();
       }
-    });
+    } else {
+      console.error(`Modal not found: ${modalId}`);
+    }
   },
 
-  async refreshAll() {
-    this.refreshDashboard();
-    clientsModule.render();
-    devicesModule.render();
-    interventionsModule.render();
-    checklistsModule.render();
-    documentationModule.render();
-    await this.populateSelects();
-  },
-
-  async refreshDashboard() {
-    const clients = await dbModule.getAll('clients');
-    const interventions = await dbModule.getAll('interventions');
-    const today = new Date().setHours(0, 0, 0, 0);
-
-    document.getElementById('statClients').textContent = clients.length;
-    document.getElementById('statToday').textContent = interventions.filter(i => new Date(i.date).setHours(0, 0, 0, 0) === today).length;
-    document.getElementById('statDone').textContent = interventions.filter(i => i.status === 'resolu').length;
-    document.getElementById('statPending').textContent = interventions.filter(i => i.status === 'en-cours').length;
-
-    // Derniers clients
-    const recentClients = [...clients].sort((a, b) => (b.lastIntervention || b.createdAt) - (a.lastIntervention || a.createdAt)).slice(0, 5);
-    document.getElementById('dashboardClients').innerHTML = recentClients.length
-      ? recentClients.map(c => `
-        <div class="list-item" onclick="app.goTo('client-detail'); clientsModule.showDetail(${c.id})">
-          <div>
-            <div class="list-item-title">${c.prenom} ${c.nom}</div>
-            <div class="list-item-sub">${c.phone || ''}</div>
-          </div>
-          <span class="list-item-meta">${c.lastIntervention ? new Date(c.lastIntervention).toLocaleDateString('fr-FR') : 'Jamais'}</span>
-        </div>
-      `).join('')
-      : '<div class="empty-state">Aucun client</div>';
-
-    // Dernières interventions
-    const recentInt = [...interventions].sort((a, b) => b.date - a.date).slice(0, 5);
-    document.getElementById('dashboardInterventions').innerHTML = recentInt.length
-      ? recentInt.map(i => `
-        <div class="list-item" onclick="app.goTo('intervention-detail'); interventionsModule.showDetail(${i.id})">
-          <div>
-            <div class="list-item-title">${i.problem?.substring(0, 40) || 'Intervention'}...</div>
-            <div class="list-item-sub">${new Date(i.date).toLocaleDateString('fr-FR')} — ${this.statusLabel(i.status)}</div>
-          </div>
-        </div>
-      `).join('')
-      : '<div class="empty-state">Aucune intervention</div>';
-  },
-
-  statusLabel(s) {
-    const map = { 'en-cours': 'En cours', 'resolu': 'Résolu', 'non-resolu': 'Non résolu', 'a-revoir': 'À revoir' };
-    return map[s] || s;
-  },
-
-  async globalSearch(query) {
-    if (!query.trim()) { app.toast('Entrez un terme de recherche'); return; }
-    query = query.toLowerCase();
-    const [clients, devices, interventions, docs] = await Promise.all([
-      dbModule.getAll('clients'),
-      dbModule.getAll('devices'),
-      dbModule.getAll('interventions'),
-      dbModule.getAll('documentation')
-    ]);
-
-    const results = { clients: [], devices: [], interventions: [], docs: [] };
-
-    clients.forEach(c => {
-      if ((c.nom + ' ' + c.prenom + ' ' + c.phone + ' ' + c.email).toLowerCase().includes(query))
-        results.clients.push(c);
-    });
-    devices.forEach(d => {
-      if ((d.brand + ' ' + d.model + ' ' + d.os).toLowerCase().includes(query))
-        results.devices.push(d);
-    });
-    interventions.forEach(i => {
-      if ((i.problem + ' ' + i.solution + ' ' + i.diagnostic).toLowerCase().includes(query))
-        results.interventions.push(i);
-    });
-    docs.forEach(d => {
-      if ((d.title + ' ' + d.source).toLowerCase().includes(query))
-        results.docs.push(d);
-    });
-
-    let html = '';
-    if (results.clients.length) {
-      html += '<h3 style="margin:16px 0 8px">👤 Clients</h3>';
-      html += results.clients.map(c => `
-        <div class="list-item" onclick="app.goTo('client-detail'); clientsModule.showDetail(${c.id})">
-          <div class="list-item-title">${c.prenom} ${c.nom}</div>
-          <div class="list-item-sub">${c.phone || ''}</div>
-        </div>
-      `).join('');
+  // Fermer une modale
+  closeModal: function(modalId) {
+    const modal = document.getElementById(modalId);
+    if (modal) {
+      modal.classList.remove('active');
     }
-    if (results.devices.length) {
-      html += '<h3 style="margin:16px 0 8px">📱 Appareils</h3>';
-      html += results.devices.map(d => `
-        <div class="list-item" onclick="app.goTo('device-detail'); devicesModule.showDetail(${d.id})">
-          <div class="list-item-title">${d.brand} ${d.model}</div>
-          <div class="list-item-sub">${d.category} — ${d.os || ''}</div>
-        </div>
-      `).join('');
-    }
-    if (results.interventions.length) {
-      html += '<h3 style="margin:16px 0 8px">🔧 Interventions</h3>';
-      html += results.interventions.map(i => `
-        <div class="list-item" onclick="app.goTo('intervention-detail'); interventionsModule.showDetail(${i.id})">
-          <div class="list-item-title">${i.problem?.substring(0, 50) || 'Intervention'}...</div>
-          <div class="list-item-sub">${new Date(i.date).toLocaleDateString('fr-FR')}</div>
-        </div>
-      `).join('');
-    }
-    if (results.docs.length) {
-      html += '<h3 style="margin:16px 0 8px">📚 Documentation</h3>';
-      html += results.docs.map(d => `
-        <div class="doc-item">
-          <a href="${d.url}" target="_blank" rel="noopener">${d.title}</a>
-          <div class="doc-source">Source: ${d.source}</div>
-        </div>
-      `).join('');
-    }
-
-    if (!html) html = '<div class="empty-state">Aucun résultat</div>';
-    document.getElementById('searchResults').innerHTML = html;
-    app.goTo('search-results');
   }
 };
 
-document.addEventListener('DOMContentLoaded', () => app.init());
+// Initialisation de l'application au chargement de la page
+window.addEventListener('DOMContentLoaded', app.init.bind(app));
+
+// Gestion du bouton 'retour' du navigateur
+window.addEventListener('popstate', (event) => {
+  if (event.state && event.state.section) {
+    // Si un code PIN est requis, ne pas autoriser la navigation via popstate
+    if (securityModule.pinRequired) {
+      app.goTo('dashboard'); // Rediriger vers le tableau de bord verrouillé
+      return;
+    }
+    app.goTo(event.state.section, null, true); // true = ne pas pousser un nouvel état
+  } else {
+    app.goTo('dashboard', null, true);
+  }
+});
