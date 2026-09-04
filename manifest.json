@@ -2,12 +2,12 @@
   "name": "Assistant Numérique à Domicile",
   "short_name": "AssistantNum",
   "description": "Outil d'intervention professionnel pour assistant numérique à domicile",
-  "start_url": "/assistant-numerique/index.html",
+  "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#2563eb",
   "orientation": "portrait-primary",
-  "scope": "/assistant-numerique/",
+  "scope": "./",
   "icons": [
     {
       "src": "assets/icons/icon-72x72.png",
